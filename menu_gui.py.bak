@@ -1,0 +1,1556 @@
+import tkinter as tk
+from tkinter import messagebox, ttk, filedialog
+import webbrowser
+import time
+from math import sin, cos, pi
+import turtle
+import json
+import os
+import urllib.request
+from io import BytesIO
+import sys
+import random
+from threading import Thread, Lock
+import hashlib
+import string
+import math  # Add this import for player token positioning
+import subprocess
+from PIL import Image, ImageDraw, ImageTk
+
+# Add Ursina imports at the top of the file
+# from ursina import Ursina, Button, Sky, FirstPersonController, Entity, color, scene, camera, raycast, destroy
+
+print(f"Using Python: {sys.executable}")
+
+try:
+    from PIL import Image, ImageTk
+    print("PIL successfully imported")
+    PIL_AVAILABLE = True
+except ImportError as e:
+    print(f"Error importing PIL: {e}")
+    print(f"Installing PIL using: {sys.executable} -m pip install Pillow")
+    import subprocess
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
+        from PIL import Image, ImageTk
+        print("PIL installed and imported successfully")
+        PIL_AVAILABLE = True
+    except Exception as e:
+        print(f"Failed to install PIL: {e}")
+        PIL_AVAILABLE = False
+
+# Import the user database class with error handling
+try:
+    from user_database import UserDatabase
+    print("UserDatabase successfully imported")
+except ImportError as e:
+    print(f"Error importing UserDatabase: {e}")
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        from user_database import UserDatabase
+        print("UserDatabase imported using absolute path")
+    except ImportError as e:
+        print(f"Failed to import UserDatabase: {e}")
+        messagebox.showerror("Import Error", "Could not import UserDatabase module. Please make sure user_database.py is in the same directory as menu_gui.py.")
+        sys.exit(1)
+
+# Add the lock for thread synchronization
+lyrics_lock = Lock()
+
+def save_credentials(username, password):
+    credentials = {
+        "username": username,
+        "password": password
+    }
+    with open("credentials.json", "w") as f:
+        json.dump(credentials, f)
+
+def load_credentials():
+    try:
+        with open("credentials.json", "r") as f:
+            return json.load(f)
+    except:
+        return None
+
+# Add the lyrics animation functions
+def animate_text(text, delay=0.1, text_widget=None):
+    if text_widget:
+        # GUI version - animate in a text widget
+        for char in text:
+            text_widget.insert(tk.END, char)
+            text_widget.see(tk.END)
+            text_widget.update()
+            time.sleep(delay)
+        text_widget.insert(tk.END, "\n")
+    else:
+        # Console version
+        with lyrics_lock:
+            for char in text:
+                sys.stdout.write(char)
+                sys.stdout.flush()
+                time.sleep(delay)
+            print()
+
+def sing_lyric(lyric, delay, speed, text_widget=None):
+    time.sleep(delay)
+    animate_text(lyric, speed, text_widget)
+
+def sing_song(text_widget=None):
+    lyrics = [
+        ("\nKarna kamu cantik", 0.09),
+        ("Kan kuberi segalanya apa yang kupunya", 0.09),
+        ("Dan hatimu baik", 0.10),
+        ("Sempurnalah duniaku saat kau di sisiku\n", 0.10),
+        ("Bukan karna make up di wajahmu", 0.09),
+        ("Atau lipstik merah itu", 0.09),
+        ("Lembut hati tutur kata", 0.08),
+        ("Terciptalah cinta yang kupuja\n", 0.10),
+    ]
+    
+    delays = [0.3, 3.4, 7.4, 10.5, 14.5, 18.0, 21.9, 24.4]
+    
+    threads = []
+    for i in range(len(lyrics)):
+        lyric, speed = lyrics[i]
+        t = Thread(target=sing_lyric, args=(lyric, delays[i], speed, text_widget))
+        threads.append(t)
+        t.start()
+    
+    for thread in threads:
+        thread.join()
+
+class AnimatedBackground:
+    def __init__(self, parent, width, height, colors):
+        self.parent = parent
+        self.width = width
+        self.height = height
+        self.colors = colors
+        
+        # Get the first color as the background color (darkest purple)
+        bg_color = colors[0]
+        
+        # Create canvas that fills the entire parent window
+        self.canvas = tk.Canvas(
+            parent, 
+            width=width, 
+            height=height, 
+            highlightthickness=0, 
+            bg=bg_color  # Use theme color instead of black
+        )
+        # Use place with relwidth and relheight to ensure it fills the entire window
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Create particles
+        self.particles = []
+        
+        # Create 100 particles
+        for _ in range(100):
+            # Random position
+            x = random.randint(0, width)
+            y = random.randint(0, height)
+            
+            # Random size (small)
+            size = random.randint(2, 4)
+            
+            # Random color from theme
+            color = random.choice(colors)
+            
+            # Random speed (slow to medium)
+            speed = random.uniform(1, 3)
+            
+            # Create the particle
+            particle_id = self.canvas.create_oval(
+                x - size, y - size, x + size, y + size,
+                fill=color, outline=color
+            )
+            
+            # Store particle data
+            self.particles.append({
+                'id': particle_id,
+                'x': x,
+                'y': y,
+                'size': size,
+                'color': color,
+                'speed': speed
+            })
+        
+        # Start animation
+        self.running = True
+        self.after_id = None
+        self.animate()
+    
+    def animate(self):
+        if not self.running:
+            return
+            
+        # Move each particle
+        for particle in self.particles:
+            # Move down
+            particle['y'] += particle['speed']
+            
+            # If particle is off-screen, reset to top
+            if particle['y'] > self.height + particle['size']:
+                # Reset to random position at top
+                particle['y'] = -particle['size']
+                particle['x'] = random.randint(0, self.width)
+                
+                # Maybe change color
+                if random.random() < 0.3:
+                    particle['color'] = random.choice(self.colors)
+                    self.canvas.itemconfig(particle['id'], fill=particle['color'], 
+                                          outline=particle['color'])
+            
+            # Update particle position
+            size = particle['size']
+            self.canvas.coords(
+                particle['id'],
+                particle['x'] - size,
+                particle['y'] - size,
+                particle['x'] + size,
+                particle['y'] + size
+            )
+        
+        # Schedule next frame
+        try:
+            self.after_id = self.parent.after(30, self.animate)
+        except:
+            # If parent is destroyed, stop animation
+            self.running = False
+    
+    def stop(self):
+        """Stop the animation"""
+        self.running = False
+        if self.after_id:
+            try:
+                self.parent.after_cancel(self.after_id)
+            except:
+                pass  # Ignore errors if parent is already destroyed
+
+class FlowerAnimation:
+    def __init__(self, parent):
+        self.window = tk.Toplevel(parent)
+        self.window.title("Flower Animation")
+        self.window.geometry("800x600")
+        
+        # Create canvas for turtle
+        self.canvas = tk.Canvas(self.window, width=800, height=600, bg="#000000")
+        self.canvas.pack(fill=tk.BOTH, expand=True)
+        
+        # Create turtle screen
+        self.screen = turtle.TurtleScreen(self.canvas)
+        self.screen.bgcolor("#000000")
+        
+        # Create and configure turtle
+        self.t = turtle.RawTurtle(self.screen)
+        self.t.speed(0)
+        self.t.hideturtle()
+        
+        # Bind window closing event
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Start animation
+        self.animate()
+    
+    def animate(self):
+        try:
+            # Using hex color codes instead of color names
+            palette = ["#FFFF00", "#FF0000", "#FFFF00", "#FF0000"]
+            
+            iterations = 120
+            for step in range(iterations):
+                if not self.window.winfo_exists():
+                    break
+                radius = 200 - step
+                for shade in palette:
+                    if not self.window.winfo_exists():
+                        break
+                    self.t.color(shade)
+                    self.t.circle(radius, 100)
+                    self.t.left(90)
+                    self.t.circle(radius, 100)
+                    self.t.right(60)
+                    self.t.end_fill()
+                    self.window.update()
+        except:
+            pass
+    
+    def on_closing(self):
+        try:
+            self.t.clear()
+            self.t.hideturtle()
+            self.screen.clear()
+            self.window.destroy()
+        except:
+            self.window.destroy()
+
+class RegisterWindow:
+    def __init__(self, parent):
+        """Initialize the registration window."""
+        self.parent = parent
+        self.root = tk.Toplevel(parent)
+        self.root.title("Create Account")
+        self.root.geometry("400x600")
+        self.root.resizable(False, False)
+        
+        # Define theme colors
+        self.bg_color = "#2B1B2C"  # Dark purple background
+        self.accent_color = "#FF69B4"  # Pink accent
+        self.text_color = "#FFFFFF"  # White text
+        self.hover_color = "#FF1493"  # Deeper pink for hover
+        self.entry_bg = "#3D2A3E"  # Slightly lighter purple for entry fields
+        
+        # Set window background
+        self.root.configure(bg=self.bg_color)
+        
+        # Create animated background
+        self.bg_colors = ["#2B1B2C", "#3D2A3E", "#FF69B4", "#FF1493"]
+        self.background = AnimatedBackground(self.root, 400, 600, self.bg_colors)
+        
+        # Create a semi-transparent overlay
+        self.overlay_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.overlay_frame.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Create a stippled overlay for semi-transparency
+        self.overlay_canvas = tk.Canvas(self.overlay_frame, highlightthickness=0, bg=self.bg_color)
+        self.overlay_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.overlay_canvas.create_rectangle(0, 0, 400, 600, fill=self.bg_color, stipple="gray50")
+        
+        # Create main frame
+        self.main_frame = tk.Frame(self.overlay_frame, bg=self.bg_color, padx=20, pady=20)
+        self.main_frame.place(relx=0.5, rely=0.5, anchor='center', width=360, height=560)
+        
+        # Create title label
+        self.title_label = tk.Label(
+            self.main_frame,
+            text="Create Account",
+            font=("Arial", 24, "bold"),
+            bg=self.bg_color,
+            fg=self.accent_color
+        )
+        self.title_label.pack(pady=(0, 20))
+        
+        # Create form frame
+        self.form_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.form_frame.pack(fill=tk.X, pady=10)
+        
+        # Username field
+        self.create_field_with_label("Username", "username_entry")
+        
+        # Email field
+        self.create_field_with_label("Email (optional)", "email_entry")
+        
+        # Password field
+        self.create_field_with_label("Password", "password_entry", show_password=True)
+        
+        # Confirm Password field
+        self.create_field_with_label("Confirm Password", "confirm_entry", show_password=True)
+        
+        # Buttons frame
+        self.buttons_frame = tk.Frame(self.form_frame, bg=self.bg_color)
+        self.buttons_frame.pack(fill=tk.X, pady=(20, 0))
+        
+        # Register button
+        self.register_button = tk.Button(
+            self.buttons_frame,
+            text="Create Account",
+            font=("Arial", 12, "bold"),
+            bg=self.accent_color,
+            fg=self.text_color,
+            width=15,
+            height=2,
+            relief="flat",
+            cursor="hand2",
+            command=self.register
+        )
+        self.register_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Add hover effect
+        self.register_button.bind("<Enter>", lambda e: self.register_button.configure(bg=self.hover_color))
+        self.register_button.bind("<Leave>", lambda e: self.register_button.configure(bg=self.accent_color))
+        
+        # Cancel button
+        self.cancel_button = tk.Button(
+            self.buttons_frame,
+            text="Cancel",
+            font=("Arial", 12),
+            bg=self.entry_bg,
+            fg=self.text_color,
+            width=10,
+            height=2,
+            relief="flat",
+            cursor="hand2",
+            command=self.root.destroy
+        )
+        self.cancel_button.pack(side=tk.LEFT)
+        
+        # Add hover effect
+        self.cancel_button.bind("<Enter>", lambda e: self.cancel_button.configure(bg="#4D3A4E"))
+        self.cancel_button.bind("<Leave>", lambda e: self.cancel_button.configure(bg=self.entry_bg))
+        
+        # Initialize the user database
+        self.user_db = UserDatabase()
+        
+        # Center the window relative to parent
+        self.center_window()
+        
+        # Set this window as modal
+        self.root.transient(parent)
+        self.root.grab_set()
+        
+        # Bind Enter key to register function
+        self.root.bind('<Return>', lambda event: self.register())
+    
+    def create_field_with_label(self, label_text, entry_name, show_password=False):
+        """Create a labeled form field."""
+        # Create a frame for this field
+        field_frame = tk.Frame(self.form_frame, bg=self.bg_color)
+        field_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        # Create label
+        label = tk.Label(
+            field_frame,
+            text=label_text,
+            font=("Arial", 12),
+            bg=self.bg_color,
+            fg=self.text_color
+        )
+        label.pack(anchor='w')
+        
+        # Create entry
+        entry = tk.Entry(
+            field_frame,
+            font=("Arial", 12),
+            bg=self.entry_bg,
+            fg=self.text_color,
+            insertbackground=self.text_color,  # Cursor color
+            width=30,
+            relief="solid",
+            highlightcolor=self.accent_color,
+            highlightbackground=self.accent_color,
+            highlightthickness=1
+        )
+        
+        if show_password:
+            entry.configure(show="•")
+            
+        entry.pack(fill=tk.X, pady=5)
+        
+        # Store the entry widget
+        setattr(self, entry_name, entry)
+    
+    def center_window(self):
+        """Center the window relative to the parent."""
+        self.root.update_idletasks()
+        parent_x = self.parent.winfo_rootx()
+        parent_y = self.parent.winfo_rooty()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+        
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        
+        x = parent_x + (parent_width // 2) - (width // 2)
+        y = parent_y + (parent_height // 2) - (height // 2)
+        
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def register(self):
+        """Register a new user."""
+        # Get form data
+        username = self.username_entry.get().strip()
+        email = self.email_entry.get().strip()
+        password = self.password_entry.get()
+        confirm = self.confirm_entry.get()
+        
+        print(f"Attempting to register user: {username}")
+        
+        # Validate input
+        if not username:
+            messagebox.showerror("Error", "Please enter a username")
+            return
+        
+        if not password:
+            messagebox.showerror("Error", "Please enter a password")
+            return
+        
+        if password != confirm:
+            messagebox.showerror("Error", "Passwords do not match")
+            return
+        
+        # Register the user
+        try:
+            # Create a fresh UserDatabase instance to ensure we're using the latest file
+            self.user_db = UserDatabase()
+            
+            print(f"Current users in database: {list(self.user_db.users.keys())}")
+            
+            success, message = self.user_db.register_user(username, password, email)
+            
+            if success:
+                print(f"User {username} registered successfully")
+                print(f"Updated users in database: {list(self.user_db.users.keys())}")
+                
+                # Ensure the database is saved
+                self.user_db.save_database()
+                
+                # Show success message and close registration window
+                messagebox.showinfo("Success", "Account created successfully!\nYou can now log in with your new account.")
+                self.root.destroy()
+            else:
+                print(f"Registration failed: {message}")
+                messagebox.showerror("Registration Failed", message)
+        except Exception as e:
+            print(f"Error during registration: {str(e)}")
+            messagebox.showerror("Registration Error", f"An error occurred: {str(e)}")
+
+class LoginWindow:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Login")
+        self.root.geometry("400x750")
+        self.root.resizable(False, False)  # Disable resizing completely
+        
+        # Define theme colors
+        self.bg_color = "#2B1B2C"  # Dark purple background
+        self.accent_color = "#FF69B4"  # Pink accent
+        self.text_color = "#FFFFFF"  # White text
+        self.hover_color = "#FF1493"  # Deeper pink for hover
+        self.entry_bg = "#3D2A3E"  # Slightly lighter purple for entry fields
+        
+        # Initialize login status and credentials
+        self.success = False
+        self.logged_in_username = ""
+        
+        # Center the window
+        self.center_window()
+        
+        # Set window background to black for better animation visibility
+        self.root.configure(bg="black")
+        
+        # Create animated background first (so it's at the bottom)
+        self.bg_colors = ["#2B1B2C", "#3D2A3E", "#FF69B4", "#FF1493"]
+        self.background = AnimatedBackground(self.root, 400, 750, self.bg_colors)
+        
+        # Create a semi-transparent overlay
+        self.overlay_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.overlay_frame.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Create a stippled overlay for semi-transparency
+        self.overlay_canvas = tk.Canvas(self.overlay_frame, highlightthickness=0, bg=self.bg_color)
+        self.overlay_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.overlay_canvas.create_rectangle(0, 0, 400, 750, fill=self.bg_color, stipple="gray50")
+        
+        # Create content frame on top
+        self.content_frame = tk.Frame(self.root)
+        self.content_frame.place(relx=0.5, rely=0.5, anchor='center', width=360, height=700)
+        self.content_frame.configure(bg=self.bg_color)
+        
+        # Create main frame
+        self.main_frame = tk.Frame(self.content_frame, padx=20, pady=20, bg=self.bg_color)
+        self.main_frame.pack(fill='both', expand=True)
+        
+        # Create top frame for image and logo
+        self.top_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.top_frame.pack(fill='x', pady=(0, 20))
+        
+        # Load and display image in top frame
+        self.load_image()
+        
+        # Create logo text with custom style in top frame
+        self.logo_label = tk.Label(
+            self.top_frame,
+            text="Login Page",
+            font=("Arial", 44, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_color
+        )
+        self.logo_label.pack(pady=(10, 0))
+        
+        # Create decorative line
+        self.line = tk.Canvas(
+            self.main_frame,
+            height=2,
+            bg=self.accent_color,
+            highlightthickness=0
+        )
+        self.line.pack(fill='x', pady=(0, 20))
+        
+        # Create middle frame for login controls
+        self.middle_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.middle_frame.pack(fill='x', pady=20)
+        
+        # Username with custom style
+        self.username_frame = tk.Frame(self.middle_frame, bg=self.bg_color)
+        self.username_frame.pack(pady=(0, 15), fill='x')
+        
+        self.username_label = tk.Label(
+            self.username_frame,
+            text="Username",
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        self.username_label.pack(anchor='w')
+        
+        # Username Entry
+        self.username_entry = tk.Entry(
+            self.username_frame,
+            width=30,
+            font=("Arial", 12),
+            bg=self.entry_bg,
+            fg=self.text_color,
+            insertbackground=self.text_color,  # Cursor color
+            relief="solid",
+            highlightcolor=self.accent_color,
+            highlightbackground=self.accent_color,
+            highlightthickness=1
+        )
+        self.username_entry.pack(fill='x', pady=5)
+        
+        # Password with custom style
+        self.password_frame = tk.Frame(self.middle_frame, bg=self.bg_color)
+        self.password_frame.pack(pady=(0, 15), fill='x')
+        
+        self.password_label = tk.Label(
+            self.password_frame,
+            text="Password",
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        self.password_label.pack(anchor='w')
+        
+        # Password Entry
+        self.password_entry = tk.Entry(
+            self.password_frame,
+            show="•",
+            width=30,
+            font=("Arial", 12),
+            bg=self.entry_bg,
+            fg=self.text_color,
+            insertbackground=self.text_color,  # Cursor color
+            relief="solid",
+            highlightcolor=self.accent_color,
+            highlightbackground=self.accent_color,
+            highlightthickness=1
+        )
+        self.password_entry.pack(fill='x', pady=5)
+        
+        # Create bottom frame for remember me and login button
+        self.bottom_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.bottom_frame.pack(fill='x', pady=(0, 20))
+        
+        # Remember Me checkbox with custom style
+        self.remember_var = tk.BooleanVar()
+        self.remember_checkbox = tk.Checkbutton(
+            self.bottom_frame,
+            text="Remember Me",
+            variable=self.remember_var,
+            bg=self.bg_color,
+            fg=self.text_color,
+            selectcolor=self.bg_color,
+            activebackground=self.bg_color,
+            activeforeground=self.text_color
+        )
+        self.remember_checkbox.pack(anchor='w', pady=(0, 15))
+        
+        # Button frame for login and register buttons
+        self.button_frame = tk.Frame(self.bottom_frame, bg=self.bg_color)
+        self.button_frame.pack(fill='x')
+        
+        # Login button with custom style
+        self.login_button = tk.Button(
+            self.button_frame,
+            text="Login",
+            command=self.login,
+            font=("Arial", 12, "bold"),
+            bg=self.accent_color,
+            fg=self.text_color,
+            width=15,
+            height=2,
+            relief="flat",
+            cursor="hand2"
+        )
+        self.login_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Add hover effect to login button
+        self.login_button.bind("<Enter>", lambda e: self.login_button.configure(bg=self.hover_color))
+        self.login_button.bind("<Leave>", lambda e: self.login_button.configure(bg=self.accent_color))
+        
+        # Register button
+        self.register_button = tk.Button(
+            self.button_frame,
+            text="Create Account",
+            command=self.open_register,
+            font=("Arial", 12),
+            bg=self.entry_bg,
+            fg=self.text_color,
+            width=15,
+            height=2,
+            relief="flat",
+            cursor="hand2"
+        )
+        self.register_button.pack(side=tk.LEFT)
+        
+        # Add hover effect to register button
+        self.register_button.bind("<Enter>", lambda e: self.register_button.configure(bg="#4D3A4E"))
+        self.register_button.bind("<Leave>", lambda e: self.register_button.configure(bg=self.entry_bg))
+        
+        # Add "Continue as Guest" button
+        self.guest_button = tk.Button(
+            self.main_frame,
+            text="Continue as Guest",
+            command=self.login_as_guest,
+            font=("Arial", 10),
+            bg=self.bg_color,
+            fg=self.text_color,
+            relief="flat",
+            cursor="hand2",
+            bd=1,
+            highlightbackground=self.entry_bg,
+            highlightthickness=1
+        )
+        self.guest_button.pack(pady=(0, 10))
+        
+        # Add hover effect to guest button
+        self.guest_button.bind("<Enter>", lambda e: self.guest_button.configure(bg=self.entry_bg))
+        self.guest_button.bind("<Leave>", lambda e: self.guest_button.configure(bg=self.bg_color))
+        
+        # Bind Enter key to login
+        self.root.bind('<Return>', lambda event: self.login())
+        
+        # Initialize the user database
+        self.user_db = UserDatabase()
+        
+        # Load saved credentials if they exist
+        self.load_saved_credentials()
+    
+    def open_register(self):
+        """Open the registration window."""
+        RegisterWindow(self.root)
+    
+    def load_image(self):
+        if not PIL_AVAILABLE:
+            self.create_placeholder_label("PIL not available")
+            return
+            
+        try:
+            # URL of the image
+            image_url = "https://i.pinimg.com/736x/56/d3/bd/56d3bd4771320512c188a0814797e0cc.jpg"
+            
+            # Configure headers for the request
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            # Create a request with headers
+            req = urllib.request.Request(image_url, headers=headers)
+            
+            # Download and process the image
+            with urllib.request.urlopen(req) as url:
+                image_data = BytesIO(url.read())
+                image = Image.open(image_data)
+                
+                # Resize image while maintaining aspect ratio
+                image_width = 200
+                aspect_ratio = image.height / image.width
+                image_height = int(image_width * aspect_ratio)
+                
+                image = image.resize((image_width, image_height), Image.Resampling.LANCZOS)
+                self.photo = ImageTk.PhotoImage(image)
+                
+                # Create and display image label
+                self.image_label = tk.Label(
+                    self.top_frame,
+                    image=self.photo,
+                    bg=self.bg_color  # Changed to use theme color
+                )
+                self.image_label.pack(pady=(0, 10))
+        except urllib.error.URLError as e:
+            self.create_placeholder_label(f"Network error: Unable to download image")
+        except Exception as e:
+            self.create_placeholder_label(f"Error loading image: {str(e)}")
+    
+    def create_placeholder_label(self, message):
+        self.image_label = tk.Label(
+            self.top_frame,
+            text=message,
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        self.image_label.pack(pady=(0, 10))
+    
+    def load_saved_credentials(self):
+        credentials = load_credentials()
+        if credentials:
+            self.username_entry.insert(0, credentials.get("username", ""))
+            self.password_entry.insert(0, credentials.get("password", ""))
+            self.remember_var.set(True)
+    
+    def center_window(self):
+        self.root.update_idletasks() 
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    def login(self):
+        username = self.username_entry.get().strip()
+        password = self.password_entry.get()
+        
+        print(f"Attempting to log in user: {username}")
+        
+        if not username or not password:
+            messagebox.showerror("Error", "Please enter both username and password")
+            return
+        
+        # Refresh the user database to ensure we have the latest data
+        try:
+            self.user_db = UserDatabase()
+            print(f"Available users in database: {list(self.user_db.users.keys())}")
+        except Exception as e:
+            print(f"Error loading user database: {str(e)}")
+        
+        # For debugging, also try hardcoded credentials
+        if username == "test" and password == "test":
+            print("Using hardcoded test credentials")
+            if self.remember_var.get():
+                save_credentials(username, password)
+            
+            # Store the username for later use
+            self.logged_in_username = username
+            
+            # Stop the animation before destroying the window
+            if hasattr(self, 'background'):
+                self.background.stop()
+            
+            self.success = True
+            self.root.destroy()
+            return
+        
+        # For backward compatibility with original credentials
+        if username == "ZAMM" and password == "Nonya":
+            print("Using original credentials")
+            if self.remember_var.get():
+                save_credentials(username, password)
+            
+            self.logged_in_username = username
+            
+            if hasattr(self, 'background'):
+                self.background.stop()
+            
+            self.success = True
+            self.root.destroy()
+            return
+        
+        # Authenticate using the user database
+        try:
+            # Try with UserDatabase for registered accounts
+            success, message = self.user_db.authenticate_user(username, password)
+            
+            if success:
+                print(f"Login successful for user: {username}")
+                if self.remember_var.get():
+                    save_credentials(username, password)
+                
+                # Store the username for later use
+                self.logged_in_username = username
+                
+                # Stop the animation before destroying the window
+                if hasattr(self, 'background'):
+                    self.background.stop()
+                
+                self.success = True
+                self.root.destroy()
+            else:
+                print(f"Login failed: {message}")
+                messagebox.showerror("Login Failed", message)
+        except Exception as e:
+            print(f"Login error: {str(e)}")
+            messagebox.showerror("Login Error", f"An error occurred: {str(e)}")
+    
+    def login_as_guest(self):
+        """Log in as a guest user with limited access."""
+        print("Logging in as guest")
+        
+        # Store guest username
+        self.logged_in_username = "Guest"
+        
+        # Stop the animation before destroying the window
+        if hasattr(self, 'background'):
+            self.background.stop()
+        
+        self.success = True
+        self.root.destroy()
+    
+    def show(self):
+        """Show the login window and return True if login was successful."""
+        self.root.mainloop()
+        return self.success
+
+class LyricsAnimation:
+    def __init__(self, parent):
+        self.parent = parent
+        self.window = tk.Toplevel(parent)
+        self.window.title("Song Lyrics")
+        self.window.geometry("600x400")
+        self.window.resizable(False, False)
+        
+        # Set window background
+        self.window.configure(bg="#2B1B2C")
+        
+        # Create a frame for the content
+        self.frame = tk.Frame(self.window, bg="#2B1B2C", padx=20, pady=20)
+        self.frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create a title label
+        self.title_label = tk.Label(
+            self.frame,
+            text="♫ Karna Kamu Cantik - Lyla ♫",
+            font=("Arial", 16, "bold"),
+            fg="#FF69B4",
+            bg="#2B1B2C"
+        )
+        self.title_label.pack(pady=(0, 20))
+        
+        # Create a text widget for displaying lyrics
+        self.text_widget = tk.Text(
+            self.frame,
+            width=50,
+            height=15,
+            font=("Arial", 12),
+            bg="#3D2A3E",
+            fg="#FFFFFF",
+            wrap=tk.WORD,
+            padx=10,
+            pady=10
+        )
+        self.text_widget.pack(fill=tk.BOTH, expand=True)
+        
+        # Create a close button
+        self.close_button = tk.Button(
+            self.frame,
+            text="Close",
+            command=self.on_closing,
+            font=("Arial", 12, "bold"),
+            bg="#FF69B4",
+            fg="#FFFFFF",
+            width=10,
+            height=1,
+            relief="flat",
+            cursor="hand2"
+        )
+        self.close_button.pack(pady=(20, 0))
+        
+        # Add hover effect to close button
+        self.close_button.bind("<Enter>", lambda e: self.close_button.configure(bg="#FF1493"))
+        self.close_button.bind("<Leave>", lambda e: self.close_button.configure(bg="#FF69B4"))
+        
+        # Set protocol for window closing
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Flag to track if window is active
+        self.is_active = True
+        
+        # Display a welcome message
+        self.text_widget.insert(tk.END, "Playing song lyrics...\n\n")
+        self.text_widget.see(tk.END)
+        self.text_widget.update()
+        
+        # Start the animation
+        self.scheduled_tasks = []
+        self.start_animation()
+    
+    def start_animation(self):
+        """Start the lyrics animation"""
+        # Define the lyrics and their timing
+        lyrics = [
+            "Karna kamu cantik",
+            "Kan kuberi segalanya apa yang kupunya",
+            "Dan hatimu baik",
+            "Sempurnalah duniaku saat kau di sisiku",
+            "Bukan karna make up di wajahmu",
+            "Atau lipstik merah itu",
+            "Lembut hati tutur kata",
+            "Terciptalah cinta yang kupuja"
+        ]
+        
+        # Define the delays (in seconds) for when each lyric should appear
+        delays = [0.3, 3.4, 7.4, 10.5, 14.5, 18.0, 21.9, 24.4]
+        
+        # Define the character display speed for each lyric
+        speeds = [0.09, 0.09, 0.10, 0.10, 0.09, 0.09, 0.08, 0.10]
+        
+        # Schedule each lyric to appear at the right time
+        for i in range(len(lyrics)):
+            delay_ms = int(delays[i] * 1000)
+            task_id = self.window.after(
+                delay_ms, 
+                lambda i=i: self.animate_lyric(lyrics[i], speeds[i])
+            )
+            self.scheduled_tasks.append(task_id)
+    
+    def animate_lyric(self, lyric, speed):
+        """Animate a single lyric character by character"""
+        if not self.is_active:
+            return
+            
+        # Add a newline before the lyric
+        self.text_widget.insert(tk.END, "\n")
+        
+        # Schedule each character to appear with the right timing
+        for i in range(len(lyric)):
+            char_delay_ms = int(speed * 1000 * (i + 1))
+            task_id = self.window.after(
+                char_delay_ms,
+                lambda i=i: self.display_char(lyric[i])
+            )
+            self.scheduled_tasks.append(task_id)
+        
+        # Add a newline after the lyric (for some lyrics)
+        if lyric in ["Sempurnalah duniaku saat kau di sisiku", "Terciptalah cinta yang kupuja"]:
+            newline_delay = int(speed * 1000 * (len(lyric) + 1))
+            task_id = self.window.after(
+                newline_delay,
+                lambda: self.text_widget.insert(tk.END, "\n")
+            )
+            self.scheduled_tasks.append(task_id)
+    
+    def display_char(self, char):
+        """Display a single character"""
+        if not self.is_active:
+            return
+            
+        self.text_widget.insert(tk.END, char)
+        self.text_widget.see(tk.END)
+        self.text_widget.update()
+    
+    def on_closing(self):
+        """Handle window closing"""
+        self.is_active = False
+        
+        # Cancel all scheduled tasks
+        for task_id in self.scheduled_tasks:
+            self.window.after_cancel(task_id)
+        
+        self.window.destroy()
+
+class FunMenu:
+    def __init__(self, parent, username="Guest"):
+        self.parent = parent
+        self.window = tk.Toplevel(parent)
+        self.window.title("Fun Menu")
+        self.window.geometry("600x500")
+        self.window.resizable(False, False)
+        
+        # Store username
+        self.username = username
+        
+        # Define theme colors
+        self.bg_color = "#2B1B2C"  # Dark purple background
+        self.accent_color = "#FF69B4"  # Pink accent
+        self.text_color = "#FFFFFF"  # White text
+        self.hover_color = "#FF1493"  # Deeper pink for hover
+        
+        # Set window background
+        self.window.configure(bg=self.bg_color)
+        
+        # Create animated background
+        self.bg_colors = ["#2B1B2C", "#3D2A3E", "#FF69B4", "#FF1493"]
+        self.background = AnimatedBackground(self.window, 600, 500, self.bg_colors)
+        
+        # Create a semi-transparent overlay
+        self.overlay_frame = tk.Frame(self.window, bg=self.bg_color)
+        self.overlay_frame.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Make overlay semi-transparent
+        self.overlay_canvas = tk.Canvas(self.overlay_frame, highlightthickness=0, bg=self.bg_color)
+        self.overlay_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        self.overlay_canvas.create_rectangle(0, 0, 600, 500, fill=self.bg_color, stipple="gray50")
+        
+        # Create main frame
+        self.main_frame = tk.Frame(self.window, bg=self.bg_color, padx=20, pady=20)
+        self.main_frame.place(relx=0.5, rely=0.5, anchor='center', width=560, height=460)
+        
+        # Create title label
+        self.title_label = tk.Label(
+            self.main_frame,
+            text="Fun Menu",
+            font=("Arial", 24, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_color
+        )
+        self.title_label.pack(pady=(0, 20))
+        
+        # Create welcome label
+        self.welcome_label = tk.Label(
+            self.main_frame,
+            text=f"Welcome {username}!",
+            font=("Arial", 16, "bold"),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        self.welcome_label.pack(pady=(0, 30))
+        
+        # Create buttons frame
+        self.buttons_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.buttons_frame.pack(pady=20)
+        
+        # Create buttons for fun options
+        self.create_option_button("Flower Animation", self.show_flower_animation, 0, 0)
+        self.create_option_button("Karna Kamu Cantik by Lyla", self.show_lyrics_animation, 0, 1)
+        
+        # Create owner social media label
+        self.owner_label = tk.Label(
+            self.main_frame,
+            text="Owner Social Media",
+            font=("Arial", 14, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_color
+        )
+        self.owner_label.pack(pady=(30, 10))
+        
+        # Create credit label
+        self.credit_label = tk.Label(
+            self.main_frame,
+            text="@xamm9912 on TikTok",
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        self.credit_label.pack()
+        
+        # Create close button
+        self.close_button = tk.Button(
+            self.main_frame,
+            text="Close",
+            command=self.on_closing,
+            font=("Arial", 12, "bold"),
+            bg=self.accent_color,
+            fg=self.text_color,
+            width=10,
+            height=1,
+            relief="flat",
+            cursor="hand2"
+        )
+        self.close_button.pack(pady=(30, 0))
+        
+        # Add hover effect to close button
+        self.close_button.bind("<Enter>", lambda e: self.close_button.configure(bg=self.hover_color))
+        self.close_button.bind("<Leave>", lambda e: self.close_button.configure(bg=self.accent_color))
+        
+        # Set protocol for window closing
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Track animation windows
+        self.animation_window = None
+        self.lyrics_window = None
+    
+    def create_option_button(self, text, command, row, col):
+        button = tk.Button(
+            self.buttons_frame,
+            text=text,
+            command=command,
+            font=("Arial", 12),
+            bg=self.accent_color,
+            fg=self.text_color,
+            width=20,
+            height=2,
+            relief="flat",
+            cursor="hand2"
+        )
+        button.grid(row=row, column=col, padx=10, pady=10)
+        
+        # Add hover effect
+        button.bind("<Enter>", lambda e: button.configure(bg=self.hover_color))
+        button.bind("<Leave>", lambda e: button.configure(bg=self.accent_color))
+    
+    def show_flower_animation(self):
+        # Check if animation window already exists
+        if self.animation_window is None or not hasattr(self.animation_window, 'window') or not self.animation_window.window.winfo_exists():
+            self.animation_window = FlowerAnimation(self.window)
+        else:
+            messagebox.showinfo("Animation", "Animation window is already open!")
+    
+    def show_lyrics_animation(self):
+        # Check if lyrics window already exists
+        if self.lyrics_window is None or not hasattr(self.lyrics_window, 'window') or not self.lyrics_window.window.winfo_exists():
+            self.lyrics_window = LyricsAnimation(self.window)
+        else:
+            messagebox.showinfo("Lyrics", "Lyrics window is already open!")
+    
+    def on_closing(self):
+        self.window.destroy()
+
+class AccountSettings:
+    def __init__(self, parent, username):
+        self.parent = parent
+        self.username = username
+        self.root = tk.Toplevel(parent)
+        self.root.title("Account Settings")
+        self.root.geometry("600x400")
+        self.root.resizable(False, False)
+        
+        # Colors
+        self.bg_color = "#1a0033"
+        self.text_color = "#ffffff"
+        self.accent_color = "#ff66cc"
+        
+        self.root.configure(bg=self.bg_color)
+        
+        # User data (mockup for demonstration)
+        self.user_data = {
+            "test": {"password": "test123"},
+            "zzz": {"password": "zzz123"},
+            "Nonya": {"password": "nonya123"}
+        }
+        
+        # Create main frame
+        self.main_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.main_frame.pack(expand=True, fill="both", padx=20, pady=20)
+        
+        # Title
+        self.title_label = tk.Label(
+            self.main_frame,
+            text="Account Settings",
+            font=("Arial", 20, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_color
+        )
+        self.title_label.pack(pady=10)
+        
+        # Username change
+        self.username_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.username_frame.pack(pady=10)
+        
+        tk.Label(
+            self.username_frame,
+            text="Change Username:",
+            font=("Arial", 14),
+            fg=self.text_color,
+            bg=self.bg_color
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.username_entry = tk.Entry(
+            self.username_frame,
+            font=("Arial", 12),
+            bg=self.accent_color,
+            fg=self.text_color
+        )
+        self.username_entry.pack(side=tk.LEFT, padx=5)
+        
+        # Password change
+        self.password_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.password_frame.pack(pady=10)
+        
+        tk.Label(
+            self.password_frame,
+            text="Change Password:",
+            font=("Arial", 14),
+            fg=self.text_color,
+            bg=self.bg_color
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.password_entry = tk.Entry(
+            self.password_frame,
+            font=("Arial", 12),
+            bg=self.accent_color,
+            fg=self.text_color,
+            show="*"
+        )
+        self.password_entry.pack(side=tk.LEFT, padx=5)
+        
+        # Profile picture change
+        self.profile_pic_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.profile_pic_frame.pack(pady=10)
+        
+        tk.Label(
+            self.profile_pic_frame,
+            text="Profile Picture:",
+            font=("Arial", 14),
+            fg=self.text_color,
+            bg=self.bg_color
+        ).pack(side=tk.LEFT, padx=5)
+        
+        self.profile_pic_button = tk.Button(
+            self.profile_pic_frame,
+            text="Upload",
+            font=("Arial", 12),
+            bg=self.accent_color,
+            fg=self.text_color,
+            command=self.upload_profile_picture
+        )
+        self.profile_pic_button.pack(side=tk.LEFT, padx=5)
+        
+        # Role information
+        self.role_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        self.role_frame.pack(pady=10)
+        
+        # Get user role from database
+        try:
+            from user_database import UserDatabase
+            user_db = UserDatabase()
+            user_role = user_db.get_user_role(username) or "User"
+        except Exception as e:
+            print(f"Error getting user role: {str(e)}")
+            user_role = "User"
+        
+        tk.Label(
+            self.role_frame,
+            text="Account Role:",
+            font=("Arial", 14),
+            fg=self.text_color,
+            bg=self.bg_color
+        ).pack(side=tk.LEFT, padx=5)
+        
+        role_color = "#ff66cc"  # Default
+        if user_role == "Admin":
+            role_color = "#ff0000"  # Red for admin
+        elif user_role == "VIP":
+            role_color = "#ffd700"  # Gold for VIP
+        
+        self.role_label = tk.Label(
+            self.role_frame,
+            text=user_role,
+            font=("Arial", 14, "bold"),
+            fg=role_color,
+            bg=self.bg_color
+        )
+        self.role_label.pack(side=tk.LEFT, padx=5)
+        
+        # Save button
+        self.save_button = tk.Button(
+            self.main_frame,
+            text="Save Changes",
+            font=("Arial", 14, "bold"),
+            bg=self.accent_color,
+            fg=self.text_color,
+            command=self.save_changes
+        )
+        self.save_button.pack(pady=20)
+        
+        # Center the window
+        self.root.update_idletasks()
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        x = (self.root.winfo_screenwidth() // 2) - (width // 2)
+        y = (self.root.winfo_screenheight() // 2) - (height // 2)
+        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Set up window close event
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def save_changes(self):
+        """Save changes to user data"""
+        new_username = self.username_entry.get()
+        new_password = self.password_entry.get()
+        
+        if new_username:
+            self.user_data[self.username]["username"] = new_username
+        if new_password:
+            self.user_data[self.username]["password"] = new_password
+        
+        messagebox.showinfo("Success", "Changes saved.")
+    
+    def upload_profile_picture(self):
+        """Upload a new profile picture"""
+        file_path = filedialog.askopenfilename(
+            title="Select Profile Picture",
+            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")]
+        )
+        if file_path:
+            self.user_data[self.username]["profile_picture"] = file_path
+            messagebox.showinfo("Success", "Profile picture updated.")
+    
+    def on_closing(self):
+        """Handle window close event"""
+        self.root.destroy()
+
+class MenuGUI:
+    def __init__(self, root, username="Guest"):
+        """Initialize the menu GUI."""
+        self.window = root
+        self.username = username
+        self.window.title(f"ZAMM's Menu - Logged in as {username}")
+        
+        # Set up the font style
+        self.default_font = ("Arial", 12)
+        self.header_font = ("Arial", 16, "bold")
+        
+        # Define theme colors
+        self.bg_color = "#2B1B2C"  # Dark purple background
+        self.accent_color = "#FF69B4"  # Pink accent
+        self.text_color = "#FFFFFF"  # White text
+        self.hover_color = "#FF1493"  # Deeper pink for hover
+        self.entry_bg = "#3D2A3E"  # Slightly lighter purple for entry fields
+        self.disabled_bg = "#555555"  # Gray for disabled buttons
+        
+        # Initialize user database for profile info
+        from user_database import UserDatabase
+        self.user_db = UserDatabase()
+        
+        # Get user role
+        if username != "Guest":
+            self.user_role = self.user_db.get_user_role(username)
+            
+            # Set default roles for hardcoded users if they don't have a role
+            if username == "ZAMM" and self.user_role == "User":
+                self.user_db.set_user_role(username, "Admin")
+                self.user_role = "Admin"
+            elif username == "test" and self.user_role == "User":
+                self.user_db.set_user_role(username, "VIP")
+                self.user_role = "VIP"
+            elif username == "Nonya" and self.user_role == "User":
+                self.user_db.set_user_role(username, "VIP")
+                self.user_role = "VIP"
+        else:
+            self.user_role = "Guest"
+        
+        # Track open windows
+        self.flower_animation = None
+        self.lyrics_animation = None
+        self.fun_menu = None
+        
+        # Set window background
+        self.window.configure(bg=self.bg_color)
+        
+        # Configure the window with a fixed size that fits all content
+        self.window.geometry("800x700")  # Increased height to fit all content
+        self.window.minsize(800, 700)    # Set minimum size to ensure all content is visible
+    
+    def show_welcome_message(self):
+        """Show a welcome message popup."""
+        # Create a popup window
+        popup = tk.Toplevel(self.window)
+        popup.title("Welcome")
+        popup.geometry("400x300")
+        popup.resizable(False, False)
+        popup.configure(bg=self.bg_color)
+        
+        # Make popup a transient window (always on top of main window)
+        popup.transient(self.window)
+        
+        # Center the popup on the main window
+        popup.update_idletasks()
+        main_x = self.window.winfo_rootx()
+        main_y = self.window.winfo_rooty()
+        main_width = self.window.winfo_width()
+        main_height = self.window.winfo_height()
+        
+        width = popup.winfo_width()
+        height = popup.winfo_height()
+        
+        x = main_x + (main_width // 2) - (width // 2)
+        y = main_y + (main_height // 2) - (height // 2)
+        
+        popup.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Create a frame
+        frame = tk.Frame(popup, bg=self.bg_color, padx=30, pady=30)
+        frame.pack(fill='both', expand=True)
+        
+        # Welcome message - different for guest users
+        if self.username.lower() == "guest":
+            welcome_text = "Welcome, Guest User!"
+            info_text = "Some features are limited in guest mode.\nLog in to access all features."
+        else:
+            welcome_text = f"Welcome back, {self.username}!"
+            info_text = f"Account Role: {self.user_role}"
+            
+        welcome_label = tk.Label(
+            frame,
+            text=welcome_text,
+            font=("Arial", 18, "bold"),
+            fg=self.accent_color,
+            bg=self.bg_color
+        )
+        welcome_label.pack(pady=(20, 15))
+        
+        # Add info text for all users
+        info_label = tk.Label(
+            frame,
+            text=info_text,
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        info_label.pack(pady=(0, 15))
+        
+        # Current time message
+        from datetime import datetime
+        time_now = datetime.now().strftime("%A, %B %d, %Y - %I:%M %p")
+        time_label = tk.Label(
+            frame,
+            text=f"Logged in on: {time_now}",
+            font=("Arial", 12),
+            fg=self.text_color,
+            bg=self.bg_color
+        )
+        time_label.pack(pady=(0, 30))
+        
+        # Close button
+        close_button = tk.Button(
+            frame,
+            text="Let's Go!",
+            font=("Arial", 12, "bold"),
+            bg=self.accent_color,
+            fg=self.text_color,
+            relief="flat",
+            cursor="hand2",
+            command=popup.destroy
+        )
+        close_button.pack(pady=20)
+        
+        # Add hover effect
+        close_button.bind("<Enter>", lambda e: close_button.configure(bg=self.hover_color))
+        close_button.bind("<Leave>", lambda e: close_button.configure(bg=self.accent_color))
+        
+        # Auto close after 5 seconds
+        popup.after(5000, popup.destroy)
+
+    def show_about(self):
+        """Show information about the application."""
+        messagebox.showinfo(
+            "About ZAMM's Menu",
+            f"ZAMM's Menu Application\n\n"
+            f"Logged in as: {self.username}\n"
+            f"Account Role: {self.user_role}\n\n"
+            f"Social Media:\n"
+            f"• GitHub: Zionn69\n"
+            f"• TikTok: @xamm9912\n"
+            f"• YouTube: @zionvex\n\n"
+            f"© 2024 ZAMM. All rights reserved."
+        )
+
+def main():
+    """Main function to run the application."""
+    try:
+        # Create login window
+        login = LoginWindow()
+        
+        # Show login window and wait for result
+        login_result = login.show()
+        
+        if login_result:
+            # Get the username that was used to log in
+            username = login.logged_in_username
+            
+            if not username:  # Fallback if username wasn't stored
+                username = "Guest"
+            
+            print(f"Login successful, launching main menu for user: {username}")
+            
+            # Create main menu window
+            root = tk.Tk()
+            app = MenuGUI(root, username=username)
+            root.mainloop()
+        else:
+            print("Login was not successful - application closed")
+    except Exception as e:
+        print(f"Error in main function: {str(e)}")
+        messagebox.showerror("Application Error", f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    main()

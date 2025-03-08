@@ -1,0 +1,19 @@
+{
+    "player": {
+        "name": "Nonya",
+        "hp": 100,
+        "max_hp": 100,
+        "attack": 10,
+        "defense": 5,
+        "level": 1,
+        "exp": 0,
+        "exp_to_level": 10,
+        "money": 50,
+        "inventory": {
+            "health_potions": 2,
+            "weapons": [],
+            "armor": []
+        }
+    },
+    "timestamp": "2025-03-07 23:44:11"
+}

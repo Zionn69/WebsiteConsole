@@ -1,0 +1,30 @@
+FIXES APPLIED TO MENU_GUI APPLICATION
+
+1. Variable Naming Consistency
+   - Changed all references to 'self.root' to 'self.window' in the MenuGUI class
+   - Ensured consistent naming across all methods
+
+2. Missing Property Addition
+   - Added 'self.entry_bg' color definition to MenuGUI class
+   - This fixed the status bar appearance issue
+
+3. Username Handling
+   - Added proper storage of logged-in username
+   - Fixed how username is passed to main menu
+
+4. Login System Improvements
+   - Added multiple authentication methods (hardcoded, database, original)
+   - Fixed error handling in authentication process
+   - Added useful debug logs
+
+5. Structure Changes
+   - Made LoginWindow return username correctly
+   - Improved main() function to better handle login results
+   - Added fallbacks for error cases
+
+These fixes ensure:
+- The login system works with test/test credentials
+- Account creation works correctly
+- The main menu opens properly after login
+- The username displays correctly in the UI
+- The application is more robust against errors 
