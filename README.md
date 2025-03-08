@@ -82,5 +82,5 @@ Fantasy RPG is a text-based role-playing game with a graphical user interface bu
 - Tkinter (included with most Python installations)
 
 ## Credits
-Created by: [Your Name/Team]
+Created by: [Zionn69]
 Version: 1.0
